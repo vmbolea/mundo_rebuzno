@@ -17,6 +17,52 @@
     .panel::-webkit-scrollbar{width:4px}
     .panel::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
     .panel-box{background:rgba(10,10,10,0.93);border:1px solid #2a2a2a;border-radius:7px;padding:10px 13px;color:#bbb;font-size:12px;width:232px;backdrop-filter:blur(6px);flex-shrink:0}
+
+    /* ── MÓVIL ── */
+    #mob-toggle{display:none}
+    @media(max-width:600px){
+      #header h1{font-size:11px}
+      #header span{display:none}
+
+      /* Botón flotante para abrir/cerrar panel */
+      #mob-toggle{
+        display:flex;align-items:center;justify-content:center;
+        position:fixed;bottom:18px;right:14px;z-index:2000;
+        width:44px;height:44px;border-radius:50%;
+        background:#4a9eff;color:#000;font-size:20px;
+        border:none;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.6);
+      }
+
+      /* Panel: cajón deslizante desde abajo */
+      .panel{
+        position:fixed;
+        bottom:0;left:0;right:0;top:auto;
+        max-height:70vh;
+        flex-direction:column;
+        gap:0;
+        border-radius:14px 14px 0 0;
+        background:rgba(10,10,10,0.97);
+        border-top:1px solid #2a2a2a;
+        padding:8px 10px 70px;
+        transform:translateY(100%);
+        transition:transform 0.3s ease;
+        overflow-y:auto;
+        scrollbar-width:thin;
+      }
+      .panel.open{transform:translateY(0)}
+
+      /* Tirador visual arriba del cajón */
+      .panel::before{
+        content:'';display:block;
+        width:40px;height:4px;border-radius:2px;
+        background:#333;margin:0 auto 10px;flex-shrink:0;
+      }
+
+      .panel-box{
+        width:100%;border-radius:6px;
+        margin-bottom:6px;
+      }
+    }
     .panel-box h3{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#444;margin-bottom:8px;border-bottom:1px solid #1f1f1f;padding-bottom:5px}
     
     /* Estilo especial para la capa del camino (destacado) */
@@ -117,6 +163,7 @@
 <div id="coords-display">Lat: — | Lon: —</div>
 <div id="zoom-notice">⚠ Curvas visibles desde zoom 13</div>
 
+<button id="mob-toggle" aria-label="Abrir capas">⚙️</button>
 <div class="panel">
 
   <!-- PANEL PRINCIPAL: CAMINO (ARRIBA, DESTACADO) -->
@@ -780,6 +827,23 @@ map.on('mousemove', function(e) {
   document.getElementById('coords-display').textContent =
     'Lat: ' + e.latlng.lat.toFixed(5) + '  |  Lon: ' + e.latlng.lng.toFixed(5);
 });
+
+// Botón móvil: abrir/cerrar panel
+(function(){
+  var btn = document.getElementById('mob-toggle');
+  var panel = document.querySelector('.panel');
+  btn.addEventListener('click', function(){
+    var open = panel.classList.toggle('open');
+    btn.textContent = open ? '✕' : '⚙️';
+  });
+  // Cerrar al tocar el mapa
+  map.on('click', function(){
+    if(panel.classList.contains('open')){
+      panel.classList.remove('open');
+      btn.textContent = '⚙️';
+    }
+  });
+})();
 
 </script>
 </body>
