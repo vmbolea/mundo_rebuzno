@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Murillo de Gállego — Análisis del Camino MR</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Verdana,Geneva,Tahoma,sans-serif;height:100vh;display:flex;flex-direction:column;background:#111}
+    #header{background:#0d0d0d;color:#ddd;padding:7px 14px;display:flex;align-items:center;gap:14px;border-bottom:1px solid #222;flex-shrink:0}
+    #header h1{font-size:13px;font-weight:600;color:#fff}
+    #header span{font-size:11px;color:#555}
+    #map{flex:1;width:100%}
+    .panel{position:absolute;top:10px;right:10px;z-index:1000;display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 55px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:#333 transparent}
+    .panel::-webkit-scrollbar{width:4px}
+    .panel::-webkit-scrollbar-thumb{background:#333;border-radius:2px}
+    .panel-box{background:rgba(10,10,10,0.93);border:1px solid #2a2a2a;border-radius:7px;padding:10px 13px;color:#bbb;font-size:12px;width:232px;backdrop-filter:blur(6px);flex-shrink:0}
+    .panel-box h3{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#444;margin-bottom:8px;border-bottom:1px solid #1f1f1f;padding-bottom:5px}
+    
+    /* Estilo especial para la capa del camino (destacado) */
+    .panel-camino {
+      background: rgba(30,40,30,0.95);
+      border: 1px solid #4a9eff;
+      box-shadow: 0 0 10px rgba(74,158,255,0.2);
+    }
+    .panel-camino h3 {
+      color: #4a9eff;
+      border-bottom-color: #4a9eff;
+    }
+    .camino-badge {
+      background: #4a9eff;
+      color: #000;
+      font-weight: bold;
+    }
+    
+    .layer-block{margin-bottom:8px}
+    .layer-block:last-child{margin-bottom:0}
+    .layer-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+    .layer-row label{font-size:12px;color:#bbb;cursor:pointer;display:flex;align-items:center;gap:6px}
+    .layer-row input[type=checkbox]{accent-color:#4a9eff;width:13px;height:13px;cursor:pointer}
+    .layer-row input[type=radio]{accent-color:#4a9eff;width:13px;height:13px;cursor:pointer}
+    .badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0}
+    .b-rgb{background:#1a3d6b;color:#5aabff}
+    .b-dem{background:#1e3d1e;color:#5ad95a}
+    .b-hist{background:#3d2a00;color:#d4a44a}
+    .b-shp{background:#3a1a3a;color:#c47eff}
+    .b-curv{background:#2a2a1a;color:#c8b870}
+    .b-cat{background:#3a1a2a;color:#f4a0c8}
+    .b-camino{background:#4a9eff;color:#000;font-weight:bold}
+    .op-row{display:flex;align-items:center;gap:6px}
+    .op-row span{font-size:10px;color:#444;min-width:30px;text-align:right}
+    .op-row input[type=range]{flex:1;accent-color:#4a9eff}
+    .op-row select{flex:1;background:#222;color:#bbb;border:1px solid #4a9eff;border-radius:4px;padding:3px 4px;font-size:11px;cursor:pointer}
+    .op-row select:hover{background:#2a2a2a}
+    .sep{border:none;border-top:1px solid #1a1a1a;margin:7px 0}
+    .uso-grid{display:flex;flex-direction:column;gap:3px;margin-top:2px}
+    .uso-row{display:flex;align-items:center;gap:7px;cursor:pointer;padding:2px 4px;border-radius:4px;transition:background 0.15s}
+    .uso-row:hover{background:rgba(255,255,255,0.04)}
+    .uso-dot{width:11px;height:11px;border-radius:2px;flex-shrink:0}
+    .uso-check{accent-color:#aaa;width:12px;height:12px;cursor:pointer;flex-shrink:0}
+    .uso-label{font-size:11px;color:#999;flex:1}
+    .uso-count{font-size:10px;color:#444;flex-shrink:0}
+    .uso-toggle-all{font-size:10px;color:#555;cursor:pointer;text-align:right;margin-bottom:4px}
+    .uso-toggle-all:hover{color:#888}
+    #coords-display{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(0,0,0,0.5);color:#777;font-size:10px;font-family:monospace;padding:2px 8px;border-radius:3px;pointer-events:none;white-space:nowrap}
+    .leaflet-control-attribution{background:rgba(0,0,0,0.5)!important;color:#555!important;font-size:9px!important}
+    .leaflet-control-attribution a{color:#4a9eff!important}
+    .leaflet-control-scale-line{background:rgba(0,0,0,0.5)!important;color:#888!important;border-color:#333!important;font-size:10px!important}
+    .recinto-tooltip{background:rgba(0,0,0,0.88);border:1px solid #4a9eff;border-radius:4px;color:#ccc;font-family:Verdana,sans-serif;font-size:11px;padding:5px 8px;line-height:1.7}
+    .recinto-tooltip b{color:#fff}
+    #zoom-notice{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(180,160,50,0.15);border:1px solid rgba(180,160,50,0.3);color:#a89840;font-size:10px;font-family:Verdana,sans-serif;padding:3px 10px;border-radius:4px;pointer-events:none;white-space:nowrap;transition:opacity 0.3s;display:none}
+    
+    /* Leyenda flotante personalizada */
+    .custom-legend {
+      background: rgba(10,10,10,0.92);
+      border: 1px solid #4a9eff;
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-size: 10px;
+      color: #bbb;
+      min-width: 150px;
+      backdrop-filter: blur(4px);
+    }
+    .custom-legend h4 {
+      color: #4a9eff;
+      font-size: 10px;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 2px;
+    }
+    .legend-gradient {
+      height: 16px;
+      width: 100px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+<div id="header">
+  <h1>🗺 Análisis del camino a recuperar propuesto por la Asociación Mundo Rebuzno</h1>
+  <span><p>Realizado por <span class="enlace-destacado"><a href="https://www.linkedin.com/in/victor-mart%C3%ADnez-bolea-556b8a135/">Víctor Martínez Bolea</a></span> para la asociación  <span class="enlace-destacado"><a href="https://www.instagram.com/asociacionmundorebuzno/">Mundo Rebuzno</a></span></p>
+</span>
+</div>
+<div id="map"></div>
+<div id="coords-display">Lat: — | Lon: —</div>
+<div id="zoom-notice">⚠ Curvas visibles desde zoom 13</div>
+
+<div class="panel">
+
+  <!-- PANEL PRINCIPAL: CAMINO (ARRIBA, DESTACADO) -->
+  <div class="panel-box panel-camino">
+    <h3>🎯 CAMINO MUNDO REBUZNO</h3>
+    <div class="layer-block">
+      <div class="layer-row">
+        <label><input type="checkbox" id="chk-camino" checked/> Mostrar camino (segmentos 10m)</label>
+      </div>
+      <div class="op-row" style="margin-top:8px">
+        <span>🎨 Colorear por:</span>
+        <select id="campo-color">
+          <option value="altura_media">🏔️ Altitud media (500-550m)</option>
+          <option value="pendiente_grados">📐 Pendiente (-15° a 15°)</option>
+          <option value="altura_vegetacion">🌿 Altura vegetación (0-3m)</option>
+        </select>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PANEL: Ortofotos / Capas base -->
+  <div class="panel-box">
+    <h3>🛰️ Ortofotos y base</h3>
+    <div class="layer-block">
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="pnoa-ma" checked/>PNOA M&aacute;x. Actualidad</label><span class="badge b-rgb">2024</span></div>
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="pnoa-2012"/>PNOA 2012</label><span class="badge b-rgb">2012</span></div>
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="pnoa-2006"/>PNOA 2006</label><span class="badge b-rgb">2006</span></div>
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="sigpac-hist"/>SIGPAC (1997-2003)</label><span class="badge b-hist">1997-2003</span></div>
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="olistat"/>OLISTAT (1997-1998)</label><span class="badge b-hist">1997-1998</span></div>
+      <div class="layer-row"><label><input type="radio" name="foto-activa" class="foto-radio" value="ams-1956"/>Vuelo Americano 1956-1957</label><span class="badge b-hist">1956-1957</span></div>
+      <div class="op-row" style="margin-top:6px"><input type="range" min="0" max="100" value="50" id="op-foto"/><span id="lbl-foto">50%</span></div>
+    </div>
+  </div>
+
+  <!-- PANEL: Capas auxiliares -->
+  <div class="panel-box">
+    <h3>🗺️ Capas de análisis</h3>
+    <div class="layer-block">
+      <div class="layer-row"><label><input type="checkbox" id="chk-mdt" checked/>MDT Hillshade LiDAR</label><span class="badge b-dem">MDE</span></div>
+      <div class="op-row"><input type="range" min="0" max="100" value="30" id="op-mdt"/><span id="lbl-mdt">30%</span></div>
+    </div>
+    <div class="layer-block">
+      <div class="layer-row"><label><input type="checkbox" id="chk-curvas" checked/>Curvas de nivel (50 m)</label><span class="badge b-curv">WMS</span></div>
+      <div class="op-row"><input type="range" min="0" max="100" value="80" id="op-curvas"/><span id="lbl-curvas">80%</span></div>
+    </div>
+    <div class="layer-block">
+      <div class="layer-row"><label><input type="checkbox" id="chk-catastro" checked/>Catastro urbano</label><span class="badge b-cat">CAT</span></div>
+      <div class="op-row"><input type="range" min="0" max="100" value="80" id="op-catastro"/><span id="lbl-catastro">80%</span></div>
+    </div>
+    <div class="layer-block">
+      <div class="layer-row"><label><input type="checkbox" id="chk-sigpac" checked/>Recintos SIGPAC</label><span class="badge b-shp">SHP</span></div>
+      <div class="op-row"><input type="range" min="0" max="100" value="80" id="op-sigpac"/><span id="lbl-sigpac">80%</span></div>
+      <hr class="sep"/>
+      <h3 style="margin-top:0">Usos SIGPAC</h3>
+      <div class="uso-toggle-all" id="toggle-all-usos">Desmarcar todo</div>
+      <div class="uso-grid" id="uso-grid"></div>
+    </div>
+  </div>
+
+  <div class="panel-box">
+    <h3>📍 Municipio</h3>
+    <div style="font-size:11px;line-height:1.9;color:#555">
+      <span style="color:#888">Murillo de Gállego</span><br/>
+      Prov. Zaragoza · Hoya de Huesca<br/>
+      <span style="color:#666">54,71 km² · 420–1190 m</span>
+    </div>
+  </div>
+
+  <div class="panel-box">
+    <h3>📚 Fuentes</h3>
+    <div style="font-size:10px;line-height:2;color:#444">
+      <a href="https://www.ign.es/wms-inspire/pnoa-ma" target="_blank" style="color:#4a9eff">PNOA-MA · IGN</a><br/>
+      <a href="https://servicios.idee.es/wms-inspire/mdt" target="_blank" style="color:#5ad95a">MDT + Curvas · IDEE/IGN</a><br/>
+      <a href="https://www.ign.es/wms/pnoa-historico" target="_blank" style="color:#d4a44a">PNOA Histórico · IGN</a><br/>
+      <a href="https://www.openstreetmap.org/copyright" target="_blank" style="color:#444">© OpenStreetMap / CARTO</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var SIGPAC_URL = 'data/sigpac_murillo.geojson';
+var CATASTRO_URL = 'data/catastro_urbana_4326.geojson';
+var CAMINO_URL = 'data/camino_mr.geojson';
+
+/* ── Mapa ── */
+var SW=[42.33185,-0.76061], NE=[42.33815,-0.74661], center=[42.33564,-0.75368];
+var fitBounds=L.latLngBounds(SW,NE);
+var map=L.map('map',{
+  center:center,zoom:5,minZoom:5,maxZoom:20,
+  maxBounds:fitBounds.pad(0.25),maxBoundsViscosity:0.9
+});
+
+// Crear paneles con z-index (camino el más alto)
+map.createPane('pnoaPane');     map.getPane('pnoaPane').style.zIndex=350;
+map.createPane('hillshadePane');map.getPane('hillshadePane').style.zIndex=360;
+map.createPane('historicPane'); map.getPane('historicPane').style.zIndex=370;
+map.createPane('sigpacPane');   map.getPane('sigpacPane').style.zIndex=450;
+map.createPane('curvasPane');   map.getPane('curvasPane').style.zIndex=480;
+map.createPane('catastroPane'); map.getPane('catastroPane').style.zIndex=490;
+map.createPane('caminoPane');   map.getPane('caminoPane').style.zIndex=500;  // El más alto
+
+// Base map (CARTO Dark)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains:'abcd',maxZoom:20
+}).addTo(map);
+
+/* ── Capas WMS ── */
+var fotoOpacity=0.50;
+
+function fotoHistorica(layerName, attribution){
+  return L.tileLayer.wms("https://www.ign.es/wms/pnoa-historico",{
+    layers:layerName,format:"image/png",transparent:true,version:"1.3.0",
+    attribution:attribution,opacity:fotoOpacity,pane:'pnoaPane'
+  });
+}
+
+var fotoLayers={
+  'pnoa-ma':L.tileLayer.wms("https://www.ign.es/wms-inspire/pnoa-ma",{
+    layers:"OI.OrthoimageCoverage",format:"image/png",transparent:true,version:"1.3.0",
+    attribution:"PNOA &copy; IGN",opacity:fotoOpacity,pane:'pnoaPane'
+  }),
+  'ams-1956':fotoHistorica("AMS_1956-1957","Vuelo Americano 1956-1957 &copy; IGN"),
+  'pnoa-2012':fotoHistorica("PNOA2012","PNOA 2012 &copy; IGN"),
+  'pnoa-2006':fotoHistorica("PNOA2006","PNOA 2006 &copy; IGN"),
+  'sigpac-hist':fotoHistorica("SIGPAC","SIGPAC 1997-2003 &copy; IGN"),
+  'olistat':fotoHistorica("OLISTAT","OLISTAT 1997-1998 &copy; IGN")
+};
+
+var activeFotoKey='pnoa-ma';
+fotoLayers[activeFotoKey].addTo(map);
+
+// MDT Hillshade
+var layerMDT=L.tileLayer("https://servicios.idee.es/wmts/mdt?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=Relieve&STYLE=Default&FORMAT=image/jpeg&TILEMATRIXSET=GoogleMapsCompatible&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",{
+  attribution:"Hillshade MDT &copy; IGN/CNIG",
+  opacity:0.70,
+  maxZoom:20,
+  pane:'hillshadePane'
+}).addTo(map);
+
+// Curvas de nivel
+var layerCurvas = L.tileLayer.wms("https://servicios.idee.es/wms-inspire/mdt", {
+  layers:      "EL.ContourLine",
+  styles:      "curvasnivel",
+  format:      "image/png",
+  transparent: true,
+  version:     "1.3.0",
+  attribution: "Curvas de nivel &copy; IGN/CNIG",
+  opacity:     0.80,
+  pane:        'curvasPane'
+}).addTo(map);
+
+// Zoom notice para curvas
+var zoomNotice = document.getElementById('zoom-notice');
+function updateZoomNotice(){
+  var chk = document.getElementById('chk-curvas').checked;
+  zoomNotice.style.display = (chk && map.getZoom() < 13) ? 'block' : 'none';
+}
+map.on('zoomend', updateZoomNotice);
+
+/* ── Helper para bindear capas WMS ── */
+function bindWMS(chkId, opId, lblId, layer, startOn){
+  var chk=document.getElementById(chkId);
+  var op=document.getElementById(opId);
+  var lbl=document.getElementById(lblId);
+  chk.checked=startOn;
+  layer.setOpacity(op.value/100);
+  if(startOn) layer.addTo(map);
+  
+  chk.addEventListener('change',function(){
+    if(this.checked){
+      layer.addTo(map);
+      layer.setOpacity(op.value/100);
+    } else {
+      map.removeLayer(layer);
+    }
+  });
+  
+  op.addEventListener('input',function(){
+    lbl.textContent=this.value+'%';
+    if(chk.checked) layer.setOpacity(this.value/100);
+  });
+}
+
+/* ── Controles foto ── */
+function setActiveFoto(key){
+  Object.keys(fotoLayers).forEach(function(k){
+    if(map.hasLayer(fotoLayers[k])) map.removeLayer(fotoLayers[k]);
+  });
+  activeFotoKey=key;
+  fotoLayers[key].setOpacity(fotoOpacity);
+  fotoLayers[key].addTo(map);
+}
+
+document.querySelectorAll('.foto-radio').forEach(function(radio){
+  radio.addEventListener('change',function(){
+    if(this.checked) setActiveFoto(this.value);
+  });
+});
+
+document.getElementById('op-foto').addEventListener('input',function(){
+  fotoOpacity=this.value/100;
+  document.getElementById('lbl-foto').textContent=this.value+'%';
+  Object.keys(fotoLayers).forEach(function(k){fotoLayers[k].setOpacity(fotoOpacity);});
+});
+
+// Bind WMS layers
+bindWMS('chk-mdt', 'op-mdt', 'lbl-mdt', layerMDT, true);
+bindWMS('chk-curvas', 'op-curvas', 'lbl-curvas', layerCurvas, true);
+
+/* ── Control de escala ── */
+L.control.scale({position:'bottomleft',imperial:false}).addTo(map);
+
+/* ── SIGPAC ── */
+var USO_CFG=[
+  {code:'MT',label:'Matorral',           color:'#556b44',count:1531},
+  {code:'TA',label:'Tierras arables',    color:'#d4a44a',count:923},
+  {code:'FO',label:'Forestal',           color:'#2d6a2d',count:762},
+  {code:'OV',label:'Olivar',             color:'#8a9a30',count:366},
+  {code:'CA',label:'Vial / Camino',      color:'#777',   count:309},
+  {code:'FS',label:'Forestal s/arbolado',color:'#1a4a1a',count:181},
+  {code:'FY',label:'Frutales',           color:'#3a7a3a',count:162},
+  {code:'IM',label:'Improductivo',       color:'#444',   count:107},
+  {code:'PR',label:'Prado',              color:'#b8d45a',count:94},
+  {code:'AG',label:'Agua',               color:'#3a6a99',count:85},
+  {code:'ED',label:'Edificación',        color:'#cc4444',count:20},
+  {code:'ZU',label:'Zona urbana',        color:'#cc6644',count:18},
+  {code:'VI',label:'Viñedo',             color:'#7a3a8a',count:13},
+  {code:'PS',label:'Pasto con arbolado', color:'#6ab04c',count:4},
+  {code:'PA',label:'Pasto arbustivo',    color:'#9ed44a',count:2},
+];
+
+var usoVisible={};
+var usoColorMap={};
+var usoNamesMap={};
+
+USO_CFG.forEach(function(u){
+  usoVisible[u.code]=true;
+  usoColorMap[u.code]=u.color;
+  usoNamesMap[u.code]=u.label;
+});
+
+// Generar interface de usos
+var grid=document.getElementById('uso-grid');
+USO_CFG.forEach(function(u){
+  var row=document.createElement('label');
+  row.className='uso-row';
+  row.innerHTML='<input type="checkbox" class="uso-check" data-uso="'+u.code+'" checked/>'+
+    '<span class="uso-dot" style="background:'+u.color+'"></span>'+
+    '<span class="uso-label">'+u.label+'</span>'+
+    '<span class="uso-count">'+u.count+'</span>';
+  grid.appendChild(row);
+  row.querySelector('input').addEventListener('change',function(){
+    usoVisible[this.dataset.uso]=this.checked;
+    refreshSIGPAC();
+    updateToggleLabel();
+  });
+});
+
+var allChecked=true;
+document.getElementById('toggle-all-usos').addEventListener('click',function(){
+  allChecked=!allChecked;
+  document.querySelectorAll('.uso-check').forEach(function(chk){
+    chk.checked=allChecked;
+    usoVisible[chk.dataset.uso]=allChecked;
+  });
+  refreshSIGPAC();
+  updateToggleLabel();
+});
+
+function updateToggleLabel(){
+  allChecked=!USO_CFG.some(function(u){return !usoVisible[u.code];});
+  var toggleBtn = document.getElementById('toggle-all-usos');
+  toggleBtn.textContent = allChecked ? 'Desmarcar todo' : 'Marcar todo';
+}
+
+var sigpacOpacity=0.80;
+var sigpacLayerOn=true;
+var sigpacLayer=null;
+
+function sigpacStyle(feat){
+  var uso=feat.properties.USO_SIGPAC||'';
+  var vis=usoVisible[uso]!==false && sigpacLayerOn;
+  return {
+    color:'#111',
+    weight:0.5,
+    opacity:vis?0.7:0,
+    fillColor:usoColorMap[uso]||'#666',
+    fillOpacity:vis?sigpacOpacity:0
+  };
+}
+
+function refreshSIGPAC(){
+  if(sigpacLayer) sigpacLayer.setStyle(sigpacStyle);
+}
+
+function buildSIGPACLayer(data){
+  sigpacLayer=L.geoJSON(data,{
+    pane:'sigpacPane',
+    style:sigpacStyle,
+    onEachFeature:function(feat,layer){
+      var p=feat.properties;
+      layer.bindTooltip(
+        '<b>'+(usoNamesMap[p.USO_SIGPAC]||p.USO_SIGPAC)+'</b><br/>'+
+        'Pol.'+p.POLIGONO+' Parc.'+p.PARCELA+' Rec.'+p.RECINTO+'<br/>'+
+        'Sup: <b>'+p.SUPERFICIE+' ha</b>  Alt: '+p.ALTITUD+' m',
+        {className:'recinto-tooltip',sticky:true}
+      );
+      layer.on('mouseover',function(){
+        if(!usoVisible[p.USO_SIGPAC]||!sigpacLayerOn) return;
+        layer.setStyle({weight:2,color:'#fff',fillOpacity:Math.min(sigpacOpacity+0.2,1)});
+      });
+      layer.on('mouseout',function(){
+        if(sigpacLayer) sigpacLayer.resetStyle(layer);
+      });
+    }
+  });
+  
+  if(sigpacLayerOn && document.getElementById('chk-sigpac').checked){
+    sigpacLayer.addTo(map);
+  }
+}
+
+// Cargar SIGPAC
+fetch(SIGPAC_URL)
+  .then(function(resp){
+    if(!resp.ok) throw new Error('No se pudo cargar '+SIGPAC_URL+' ('+resp.status+')');
+    return resp.json();
+  })
+  .then(buildSIGPACLayer)
+  .catch(function(err){
+    console.error(err);
+  });
+
+// Controles SIGPAC
+document.getElementById('chk-sigpac').addEventListener('change',function(){
+  sigpacLayerOn=this.checked;
+  if(sigpacLayer){
+    if(this.checked) sigpacLayer.addTo(map);
+    else map.removeLayer(sigpacLayer);
+    refreshSIGPAC();
+  }
+});
+
+document.getElementById('op-sigpac').addEventListener('input',function(){
+  sigpacOpacity=this.value/100;
+  document.getElementById('lbl-sigpac').textContent=this.value+'%';
+  refreshSIGPAC();
+});
+
+/* ── Catastro urbano ── */
+var catastroOpacity=0.80;
+var catastroLayerOn=true;
+var catastroLayer=null;
+
+function catastroStyle(){
+  return {
+    color:'#333',
+    weight:0.6,
+    opacity:catastroLayerOn?1:0,
+    fillColor:'#f0c0d8',
+    fillOpacity:catastroLayerOn?catastroOpacity:0
+  };
+}
+
+function refreshCatastro(){
+  if(catastroLayer) catastroLayer.setStyle(catastroStyle());
+}
+
+function buildCatastroLayer(data){
+  catastroLayer = L.geoJSON(data, {
+    pane:'catastroPane',
+    style:catastroStyle,
+    onEachFeature:function(feat,layer){
+      var p=feat.properties;
+      if(!p) return;
+      var tip = Object.entries(p).slice(0,5).map(function(e){
+        return '<b>'+e[0]+':</b> '+e[1];
+      }).join('<br/>');
+      layer.bindTooltip(tip,{className:'recinto-tooltip',sticky:true});
+      layer.on('mouseover',function(){
+        layer.setStyle({weight:1.5,color:'#fff',fillOpacity:Math.min(catastroOpacity+0.15,1)});
+      });
+      layer.on('mouseout',function(){
+        if(catastroLayer) catastroLayer.resetStyle(layer);
+      });
+    }
+  });
+  
+  if(catastroLayerOn && document.getElementById('chk-catastro').checked){
+    catastroLayer.addTo(map);
+  }
+}
+
+// Cargar catastro
+fetch(CATASTRO_URL)
+  .then(function(resp){
+    if(!resp.ok) throw new Error('No se pudo cargar '+CATASTRO_URL+' ('+resp.status+')');
+    return resp.json();
+  })
+  .then(buildCatastroLayer)
+  .catch(function(err){
+    console.error('Error cargando catastro:', err);
+  });
+
+// Controles catastro
+document.getElementById('chk-catastro').addEventListener('change',function(){
+  catastroLayerOn=this.checked;
+  if(catastroLayer){
+    if(this.checked) catastroLayer.addTo(map);
+    else map.removeLayer(catastroLayer);
+    refreshCatastro();
+  }
+});
+
+document.getElementById('op-catastro').addEventListener('input',function(){
+  catastroOpacity=this.value/100;
+  document.getElementById('lbl-catastro').textContent=this.value+'%';
+  refreshCatastro();
+});
+
+/* ── CAMINO MR (PROTAGONISTA) ── */
+var caminoLayer = null;
+var caminoData = null;
+
+// Funciones de estilo con escalas ajustadas
+function getColorByAltura(altura) {
+  var minAlt = 500, maxAlt = 550;
+  var t = (altura - minAlt) / (maxAlt - minAlt);
+  t = Math.max(0, Math.min(1, t));
+  if (t < 0.5) {
+    var t2 = t / 0.5;
+    var r = Math.floor(255 * t2);
+    var g = 255;
+  } else {
+    var t2 = (t - 0.5) / 0.5;
+    var r = 255;
+    var g = Math.floor(255 * (1 - t2));
+  }
+  return 'rgb(' + r + ', ' + g + ', 0)';
+}
+
+function getColorByPendiente(pendiente) {
+  var minP = -15, maxP = 15;
+  var t = (pendiente - minP) / (maxP - minP);
+  t = Math.max(0, Math.min(1, t));
+  if (t < 0.5) {
+    var t2 = t / 0.5;
+    var r = Math.floor(255 * t2);
+    var g = Math.floor(255 * t2);
+    var b = 255;
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  } else {
+    var t2 = (t - 0.5) / 0.5;
+    var r = 255;
+    var g = Math.floor(255 * (1 - t2));
+    var b = Math.floor(255 * (1 - t2));
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
+}
+
+function getColorByVegetacion(alturaVeg) {
+  var valor = Math.max(0, alturaVeg);
+  
+  // Categorías según altura de vegetación
+  if (valor < 0.3) {
+    // Suelo desnudo / herbáceo muy ralo: Verde claro casi amarillo
+    var t = valor / 0.3; // 0 a 1
+    r = Math.floor(180 + 75 * t);   // 180 -> 255
+    g = Math.floor(220 + 35 * t);   // 220 -> 255
+    b = Math.floor(80 - 80 * t);    // 80 -> 0
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
+  
+  else if (valor < 0.5) {
+    // Herbáceo bajo: Verde claro
+    var t = (valor - 0.3) / 0.2; // 0 a 1
+    r = Math.floor(200 - 100 * t);  // 200 -> 100
+    g = Math.floor(240 - 40 * t);   // 240 -> 200
+    b = Math.floor(60 - 60 * t);    // 60 -> 0
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
+  
+  else if (valor < 1) {
+    // Herbáceo denso / matorral bajo: Verde medio
+    var t = (valor - 0.5) / 0.5; // 0 a 1
+    r = Math.floor(100 - 100 * t);  // 100 -> 0
+    g = Math.floor(200 - 80 * t);   // 200 -> 120
+    b = Math.floor(20 - 20 * t);    // 20 -> 0
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
+  
+  else {
+    // Matorral denso / arbolado: Verde oscuro (intensidad progresiva hasta 3m)
+    var t = Math.min(1, (valor - 1) / 2); // 0 a 1 entre 1m y 3m
+    var verde = Math.floor(100 - 80 * t); // 100 -> 20
+    return 'rgb(0, ' + verde + ', 0)';
+  }
+}
+
+function getCaminoStyle(feature) {
+  var campo = document.getElementById('campo-color').value;
+  var valor = feature.properties[campo];
+  var color = '#4a9eff';
+  
+  if (valor !== undefined && valor !== null && !isNaN(valor)) {
+    if (campo === 'altura_media') {
+      color = getColorByAltura(valor);
+    } else if (campo === 'pendiente_grados') {
+      color = getColorByPendiente(valor);
+    } else if (campo === 'altura_vegetacion') {
+      color = getColorByVegetacion(valor);
+    }
+  }
+  
+  return {
+    color: color,
+    weight: 5,
+    opacity: 1,
+    pane: 'caminoPane'
+  };
+}
+
+function formatTooltip(feature) {
+  var props = feature.properties;
+  var alturaVeg = props.altura_vegetacion !== undefined ? Math.max(0, props.altura_vegetacion) : null;
+  
+  var html = '<div style="min-width:220px">';
+  html += '<b>🚶 Segmento ' + (props.order !== undefined ? props.order : '?') + '</b><br/>';
+  html += '<hr style="margin:4px 0;border-color:#333">';
+  html += '📍 <b>Altitud:</b> ' + (props.altura_media !== undefined ? props.altura_media.toFixed(1) : '?') + ' m<br/>';
+  html += '📐 <b>Pendiente:</b> ' + (props.pendiente_grados !== undefined ? props.pendiente_grados.toFixed(1) : '?') + '°';
+  
+  // Icono de dirección según pendiente
+  if (props.pendiente_grados !== undefined) {
+    if (props.pendiente_grados > 3) html += ' ▲▲';
+    else if (props.pendiente_grados > 0.5) html += ' ▲';
+    else if (props.pendiente_grados < -3) html += ' ▼▼';
+    else if (props.pendiente_grados < -0.5) html += ' ▼';
+    else html += ' ●';
+  }
+  html += '<br/>';
+  
+  html += '🌿 <b>Altura vegetación:</b> ' + (alturaVeg !== null ? alturaVeg.toFixed(2) : '?') + ' m<br/>';
+  
+  // Barra visual de altura de vegetación (0-4m)
+  if (alturaVeg !== null && alturaVeg >= 0) {
+    var barWidth = Math.min(100, (alturaVeg / 3) * 100);
+    html += '<div style="margin-top:5px;background:#2a2a2a;border-radius:3px;height:6px;width:100%">';
+    html += '<div style="background:#4a9eff;width:' + barWidth + '%;height:6px;border-radius:3px"></div>';
+    html += '</div>';
+  }
+  
+  if (props.densidad_clase) {
+    html += '🌳 <b>Densidad:</b> ' + props.densidad_clase + '<br/>';
+  }
+  
+  // Añadir distancia acumulada si existe
+  if (props.distancia_acum !== undefined) {
+    html += '📏 <b>Distancia:</b> ' + props.distancia_acum.toFixed(0) + ' m<br/>';
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+function buildCaminoLayer(data) {
+  caminoData = data;
+  caminoLayer = L.geoJSON(data, {
+    style: getCaminoStyle,
+    onEachFeature: function(feature, layer) {
+      // Tooltip al pasar el ratón
+      layer.bindTooltip(formatTooltip(feature), {
+        className: 'recinto-tooltip',
+        sticky: true,
+        direction: 'top'
+      });
+    }
+  });
+  
+  // Añadir la capa al mapa si el checkbox está activado
+  if (document.getElementById('chk-camino').checked) {
+    caminoLayer.addTo(map);
+  }
+}
+
+// Función para actualizar el estilo del camino cuando cambia el campo
+function updateCaminoStyle() {
+  if (caminoLayer) {
+    caminoLayer.setStyle(getCaminoStyle);
+  }
+}
+
+// Cargar el GeoJSON del camino
+fetch(CAMINO_URL)
+  .then(function(resp) {
+    if (!resp.ok) throw new Error('No se pudo cargar ' + CAMINO_URL + ' (' + resp.status + ')');
+    return resp.json();
+  })
+  .then(buildCaminoLayer)
+  .catch(function(err) {
+    console.error('Error cargando camino:', err);
+    // Mostrar mensaje en consola pero no en alert para no molestar
+    var panel = document.querySelector('.panel-box:first-child');
+    if (panel) {
+      console.log('Asegúrate de que el archivo ' + CAMINO_URL + ' existe en la misma carpeta');
+    }
+  });
+
+// Controles del camino
+document.getElementById('chk-camino').addEventListener('change', function() {
+  if (this.checked && caminoLayer) {
+    caminoLayer.addTo(map);
+  } else if (caminoLayer) {
+    map.removeLayer(caminoLayer);
+  }
+});
+
+// Actualizar estilo cuando cambia el campo de color
+document.getElementById('campo-color').addEventListener('change', function() {
+  updateCaminoStyle();
+});
+
+// Ajustar vista inicial
+map.fitBounds(fitBounds);
+updateZoomNotice();
+
+// Añadir leyenda para la capa del camino (opcional)
+function addLegend() {
+  var legend = L.control({position: 'bottomright'});
+  
+  legend.onAdd = function() {
+    var div = L.DomUtil.create('div', 'info legend');
+    div.style.background = 'rgba(10,10,10,0.9)';
+    div.style.padding = '8px 12px';
+    div.style.borderRadius = '5px';
+    div.style.border = '1px solid #2a2a2a';
+    div.style.fontSize = '11px';
+    div.style.color = '#bbb';
+    div.innerHTML = '<b>🎨 Camino MR</b><br>';
+    div.innerHTML += '<span style="background:#00ff00;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Baja altitud (500m)<br>';
+    div.innerHTML += '<span style="background:#ffff00;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Media altitud<br>';
+    div.innerHTML += '<span style="background:#ff0000;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Alta altitud (550m)<br>';
+    div.innerHTML += '<hr style="margin:5px 0;border-color:#333">';
+    div.innerHTML += '<span style="background:#0000ff;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Bajada fuerte<br>';
+    div.innerHTML += '<span style="background:#ffffff;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Llano<br>';
+    div.innerHTML += '<span style="background:#ff0000;display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;"></span> Subida fuerte';
+    return div;
+  };
+  
+  legend.addTo(map);
+}
+
+// Añadir leyenda (opcional, descomentar si se quiere)
+addLegend();
+
+// Mostrar coordenadas al mover el ratón
+map.on('mousemove', function(e) {
+  document.getElementById('coords-display').textContent =
+    'Lat: ' + e.latlng.lat.toFixed(5) + '  |  Lon: ' + e.latlng.lng.toFixed(5);
+});
+
+</script>
+</body>
+</html>
