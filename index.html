@@ -179,9 +179,10 @@
       <div class="op-row" style="margin-top:8px">
         <span>🎨 Colorear por:</span>
         <select id="campo-color">
+          <option value="altura_vegetacion">🌿 Altura vegetación (0-3m)</option>
           <option value="altura_media">🏔️ Altitud media (500-550m)</option>
           <option value="pendiente_grados">📐 Pendiente (-15° a 15°)</option>
-          <option value="altura_vegetacion">🌿 Altura vegetación (0-3m)</option>
+          
         </select>
       </div>
 
@@ -822,7 +823,7 @@ legendControl.onAdd = function() {
   div.id = 'legend-box';
   div.style.cssText = 'background:rgba(10,10,10,0.92);border:1px solid #2a2a2a;border-radius:6px;'+
     'padding:8px 11px;font-size:10px;color:#bbb;min-width:155px;pointer-events:none;line-height:1.7;'+
-    'margin-bottom:35px';
+    'margin-bottom:50px';
   return div;
 };
 
